@@ -32,7 +32,7 @@ farend = (118, 25, 105) # We may want to change this V value
 lowend = (130, 52, 150)
 
 #Denotes where the center of the hoop is and the ball width. This is used for basic prediction
-YTRUTH = 70
+YTRUTH = 60
 XTRUTH = 201
 BALL_WIDTH = 15
 
@@ -91,8 +91,8 @@ while True:
     blurred = cv2.GaussianBlur(frame, (11, 11), 0)
     hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, farend, lowend)
-    mask = cv2.erode(mask, None, iterations=iters)
-    mask = cv2.dilate(mask, None, iterations=iters)
+    # mask = cv2.erode(mask, None, iterations=iters)
+    # mask = cv2.dilate(mask, None, iterations=iters)
 
     # Create a mask that accounts for color and foreground objects.
     mask = cv2.bitwise_and(background, mask, mask)
@@ -136,7 +136,7 @@ while True:
                 y_coords = [point[1] for point in points]
                 fit = np.polyfit(x_coords, y_coords, 4)
                 f = np.poly1d(fit)
-                ycheck = fit[0]*XTRUTH**4 + fit[1]*XTRUTH**3 + fit[2]*XTRUTH**2 + fit[1]*XTRUTH + fit[0]
+                ycheck = f(XTRUTH)
                 accuracy = 1 - abs(YTRUTH - ycheck)/BALL_WIDTH
                 accuracy = 0 if accuracy < 0 else accuracy * 100
                 print("Chance to make it: ", accuracy)
