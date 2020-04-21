@@ -10,6 +10,7 @@ from time import sleep
 
 
 # construct the argument parse and parse the arguments
+# USAGE: Add the -v tag and then the video name (Shots.mp4)
 ap = argparse.ArgumentParser()
 ap.add_argument("-v", "--video",
     help="path to the (optional) video file")
@@ -23,18 +24,27 @@ args = vars(ap.parse_args())
 #brownLower = (29, 86, 6)
 #brownUpper = (64, 255, 255)
 
+# These are largely tuning variables. The current pair in use are farend and lowend. These are HSV ranges for acceptable colors
 brownLower = (47,25,35)
 brownUpper = (175,156,153)
 
 farend = (118, 25, 105) # We may want to change this V value
 lowend = (130, 52, 150)
 
+#Denotes where the center of the hoop is and the ball width. This is used for basic prediction
+YTRUTH = 70
+XTRUTH = 201
+BALL_WIDTH = 15
 
+# Background subtraction
 fgbg2 = cv2.createBackgroundSubtractorMOG2();
 
+# Framerate (ms)
 rate = 0
-pts = deque(maxlen=args["buffer"])
 
+
+# ?
+pts = deque(maxlen=args["buffer"])
 iters = 1
 
 # if a video path was not supplied, grab the reference
@@ -54,6 +64,9 @@ Data_Points = pd.DataFrame(data = None, columns = Data_Features , dtype = float)
 #Reading the time in the begining of the video.
 start = time.time()
 
+# Initialize found points vector to meaningless value (will be instantly reset)
+points = [(0, 0)]
+
 # keep looping
 while True:
 	# grab the current frame
@@ -70,16 +83,21 @@ while True:
 	# resize the frame, blur it, and convert it to the HSV
 	# color space
     frame = imutils.resize(frame, width=500)
+
+    #Apply background subtraction to the current frame to obtain the filter for forground objects
     background = fgbg2.apply(frame)
+
+    # Obtain a filter based on color of objects
     blurred = cv2.GaussianBlur(frame, (11, 11), 0)
     hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
-
     mask = cv2.inRange(hsv, farend, lowend)
     mask = cv2.erode(mask, None, iterations=iters)
     mask = cv2.dilate(mask, None, iterations=iters)
 
+    # Create a mask that accounts for color and foreground objects.
     mask = cv2.bitwise_and(background, mask, mask)
 
+    # Find contours based on the color/movement mask
     cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
         cv2.CHAIN_APPROX_SIMPLE)[-2]
     center = None
@@ -88,11 +106,41 @@ while True:
     if len(cnts) > 0:
 		# Need to fix ripped code.
 
+        # Pick the largest contour that was found
         c = max(cnts, key=cv2.contourArea)
         ((x, y), radius) = cv2.minEnclosingCircle(c)
         M = cv2.moments(c)
+
         if (M["m00"] != 0):
             center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+            
+            # Choose to either add to a list of points or reset the list of points
+            if (center[0] > points[-1][0] + 25):
+                points = [center]
+                print('reset\n')
+            else:
+                points.append(center)
+
+            # Given enough points lets try to make some predictions.
+            # TTTTTTTTTT     OOOOOOOO   DDDDDDDDD    OOOOOOOO
+            #      T        OO      OO  D       DD  OO      OO
+            #      T        O        O  D        D  O        O
+            #      T        O        O  D        D  O        O
+            #      T        O        O  D        D  O        O
+            #      T        O        O  D        D  O        O
+            #      T        O        O  D        D  O        O
+            #      T        OO      OO  D       DD  OO      OO
+            #      T         OOOOOOOO   DDDDDDDDD    OOOOOOOO
+            if (len(points) > 3):
+                x_coords = [point[0] for point in points]
+                y_coords = [point[1] for point in points]
+                fit = np.polyfit(x_coords, y_coords, 2)
+                ycheck = fit[0]*XTRUTH**2 + fit[1]*XTRUTH + fit[2]
+                accuracy = 1 - abs(YTRUTH - ycheck)/BALL_WIDTH
+                accuracy = 0 if accuracy < 0 else accuracy * 100
+                print("Chance to make it: ", accuracy)
+
+                
 
 
         if  (radius < 10 ) :
