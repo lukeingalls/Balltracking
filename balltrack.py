@@ -34,7 +34,7 @@ lowend = (130, 52, 150)
 #Denotes where the center of the hoop is and the ball width. This is used for basic prediction
 YTRUTH = 60
 XTRUTH = 201
-BALL_WIDTH = 15
+BALL_WIDTH = 22.5
 
 # Background subtraction
 fgbg2 = cv2.createBackgroundSubtractorMOG2();
@@ -44,6 +44,7 @@ rate = 0
 
 
 # ?
+
 pts = deque(maxlen=args["buffer"])
 iters = 1
 
@@ -51,11 +52,11 @@ iters = 1
 # to the webcam
 if not args.get("video", False):
     camera = cv2.VideoCapture(0)
-        
+
 # otherwise, grab a reference to the video file
 else:
     camera = cv2.VideoCapture(args["video"])
-    
+
 #Creating a Pandas DataFrame To Store Data Point
 Data_Features = ['x', 'y', 'time']
 Data_Points = pd.DataFrame(data = None, columns = Data_Features , dtype = float)
@@ -66,6 +67,10 @@ start = time.time()
 
 # Initialize found points vector to meaningless value (will be instantly reset)
 points = [(0, 0)]
+
+plt.axis([150,400,-150,300])
+plt.ion()
+plt.show()
 
 # keep looping
 while True:
@@ -91,8 +96,8 @@ while True:
     blurred = cv2.GaussianBlur(frame, (11, 11), 0)
     hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, farend, lowend)
-    # mask = cv2.erode(mask, None, iterations=iters)
-    # mask = cv2.dilate(mask, None, iterations=iters)
+    #mask = cv2.erode(mask, None, iterations=iters)
+    #mask = cv2.dilate(mask, None, iterations=iters)
 
     # Create a mask that accounts for color and foreground objects.
     mask = cv2.bitwise_and(background, mask, mask)
@@ -101,6 +106,8 @@ while True:
     cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
         cv2.CHAIN_APPROX_SIMPLE)[-2]
     center = None
+
+
 
 
     if len(cnts) > 0:
@@ -113,10 +120,11 @@ while True:
 
         if (M["m00"] != 0):
             center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-            
+
             # Choose to either add to a list of points or reset the list of points
             if (center[0] > points[-1][0] + 25):
                 points = [center]
+                plt.clf()
                 print('reset\n')
             else:
                 points.append(center)
@@ -131,19 +139,32 @@ while True:
             #      T        O        O  D        D  O        O
             #      T        OO      OO  D       DD  OO      OO
             #      T         OOOOOOOO   DDDDDDDDD    OOOOOOOO
+
+
             if (len(points) > 5):
                 x_coords = [point[0] for point in points]
                 y_coords = [point[1] for point in points]
-                fit = np.polyfit(x_coords, y_coords, 4)
+                fit = np.polyfit(x_coords, y_coords, 2)
                 f = np.poly1d(fit)
+                #ycheck = fit[0]*XTRUTH**4 + fit[1]*XTRUTH**3 + fit[2]*XTRUTH**2 + fit[1]*XTRUTH + fit[0]
                 ycheck = f(XTRUTH)
                 accuracy = 1 - abs(YTRUTH - ycheck)/BALL_WIDTH
                 accuracy = 0 if accuracy < 0 else accuracy * 100
-                print("Chance to make it: ", accuracy)
 
-                xp = np.linspace(200, 400, 200)
-                _ = plt.plot(x, y, '.', xp, f(xp), '--')
-                plt.show()
+                #print(' x: {} \n y: {}'.format(x_coords,y_coords))
+                #print(x,y)
+                print("Chance to make it: {:.4F}".format(accuracy))
+
+                xp = np.linspace(150, 400, 200)
+                plt.scatter(XTRUTH,YTRUTH,label = 'Hoop Location')
+                plt.scatter(x, y, label = 'Ball Postition')
+                plt.scatter(x_coords,y_coords, label = 'Tracked Postitions')
+                plt.plot(xp, f(xp), '--', label = 'Trajectory')
+                #plt.legend()
+                plt.draw()
+                plt.pause(10**-4)
+                #plt.ylim(-250,500)
+
 
         if  (radius < 10 ) :
             cv2.circle(frame, (int(x), int(y)), int(radius),
@@ -155,19 +176,19 @@ while True:
 
 	# update the points queue
     pts.appendleft(center)
-    
+
 	# loop over the set of tracked points
     for i in range(1, len(pts)):
 		# if either of the tracked points are None, ignore
 		# them
         if pts[i - 1] is None or pts[i] is None:
             continue
-            
+
 		# otherwise, compute the thickness of the line and
 		# draw the connecting lines
         thickness = int(np.sqrt(args["buffer"] / float(i + 1)) * 2.5)
         cv2.line(frame, pts[i - 1], pts[i], (0, 0, 255), thickness)
-        
+
 	# show the frame to our screen
     framecopy = frame.copy()
     for cunt in cnts:
@@ -179,7 +200,7 @@ while True:
     cv2.imshow("Mask", mask)
     cv2.imshow("Frame", frame)
     key = cv2.waitKey(rate) & 0xFF
-        
+
 	# if the 'q' key is pressed, stop the loop
     if key == ord("q"):
         break
@@ -190,7 +211,7 @@ while True:
         if rate < 1 : rate = 1
 
 
-        
+
 
 #Ripped Data Collection
 
