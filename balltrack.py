@@ -131,17 +131,19 @@ while True:
             #      T        O        O  D        D  O        O
             #      T        OO      OO  D       DD  OO      OO
             #      T         OOOOOOOO   DDDDDDDDD    OOOOOOOO
-            if (len(points) > 3):
+            if (len(points) > 5):
                 x_coords = [point[0] for point in points]
                 y_coords = [point[1] for point in points]
-                fit = np.polyfit(x_coords, y_coords, 2)
-                ycheck = fit[0]*XTRUTH**2 + fit[1]*XTRUTH + fit[2]
+                fit = np.polyfit(x_coords, y_coords, 4)
+                f = np.poly1d(fit)
+                ycheck = fit[0]*XTRUTH**4 + fit[1]*XTRUTH**3 + fit[2]*XTRUTH**2 + fit[1]*XTRUTH + fit[0]
                 accuracy = 1 - abs(YTRUTH - ycheck)/BALL_WIDTH
                 accuracy = 0 if accuracy < 0 else accuracy * 100
                 print("Chance to make it: ", accuracy)
 
-                
-
+                xp = np.linspace(200, 400, 200)
+                _ = plt.plot(x, y, '.', xp, f(xp), '--')
+                plt.show()
 
         if  (radius < 10 ) :
             cv2.circle(frame, (int(x), int(y)), int(radius),
