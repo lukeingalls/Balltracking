@@ -9,6 +9,11 @@ import matplotlib.pyplot as plt
 from time import sleep
 
 
+def circleDif(p):
+    circ = cv2.minEnclosingCircle(p)
+
+    return abs((circ[1]**2 * np.pi) - cv2.contourArea(p)) if circ[1] > 5 else float("Inf")
+
 # construct the argument parse and parse the arguments
 # USAGE: Add the -v tag and then the video name (Shots.mp4)
 ap = argparse.ArgumentParser()
@@ -21,8 +26,8 @@ args = vars(ap.parse_args())
 # define the lower and upper boundaries of the "green"
 # ball in the HSV color space, then initialize the
 # list of tracked points
-#brownLower = (29, 86, 6)
-#brownUpper = (64, 255, 255)
+# brownLower = (47,25,35)
+# brownUpper = (175,156,153)
 
 # These are largely tuning variables. The current pair in use are farend and lowend. These are HSV ranges for acceptable colors
 brownLower = (47,25,35)
@@ -33,7 +38,7 @@ lowend = (130, 52, 150)
 
 #Denotes where the center of the hoop is and the ball width. This is used for basic prediction
 YTRUTH = 60
-XTRUTH = 201
+XTRUTH = 198
 BALL_WIDTH = 22.5
 
 # Background subtraction
@@ -42,6 +47,8 @@ fgbg2 = cv2.createBackgroundSubtractorMOG2();
 # Framerate (ms)
 rate = 0
 
+accuracy = 0
+olderror = 5
 
 # ?
 
@@ -96,8 +103,8 @@ while True:
     blurred = cv2.GaussianBlur(frame, (11, 11), 0)
     hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, farend, lowend)
-    #mask = cv2.erode(mask, None, iterations=iters)
-    #mask = cv2.dilate(mask, None, iterations=iters)
+    mask = cv2.erode(mask, None, iterations=iters)
+    mask = cv2.dilate(mask, None, iterations=iters)
 
     # Create a mask that accounts for color and foreground objects.
     mask = cv2.bitwise_and(background, mask, mask)
@@ -114,7 +121,7 @@ while True:
 		# Need to fix ripped code.
 
         # Pick the largest contour that was found
-        c = max(cnts, key=cv2.contourArea)
+        c = min(cnts, key=circleDif)
         ((x, y), radius) = cv2.minEnclosingCircle(c)
         M = cv2.moments(c)
 
@@ -144,13 +151,18 @@ while True:
             if (len(points) > 5):
                 x_coords = [point[0] for point in points]
                 y_coords = [point[1] for point in points]
-                fit = np.polyfit(x_coords, y_coords, 2)
+                fit, error, _, _, _ = np.polyfit(x_coords, y_coords, 2, full=True)
                 f = np.poly1d(fit)
-                #ycheck = fit[0]*XTRUTH**4 + fit[1]*XTRUTH**3 + fit[2]*XTRUTH**2 + fit[1]*XTRUTH + fit[0]
+
+
                 ycheck = f(XTRUTH)
                 accuracy = 1 - abs(YTRUTH - ycheck)/BALL_WIDTH
                 accuracy = 0 if accuracy < 0 else accuracy * 100
 
+                # if (2 * olderror < error/len(points)):
+                #     accuracy *= olderror / (error/len(points))
+
+                olderror = error/len(points)
                 #print(' x: {} \n y: {}'.format(x_coords,y_coords))
                 #print(x,y)
                 print("Chance to make it: {:.4F}".format(accuracy))
@@ -177,6 +189,7 @@ while True:
 	# update the points queue
     pts.appendleft(center)
 
+    framecopy = frame.copy()
 	# loop over the set of tracked points
     for i in range(1, len(pts)):
 		# if either of the tracked points are None, ignore
@@ -190,11 +203,12 @@ while True:
         cv2.line(frame, pts[i - 1], pts[i], (0, 0, 255), thickness)
 
 	# show the frame to our screen
-    framecopy = frame.copy()
-    for cunt in cnts:
-        cuntarea = cv2.contourArea(cunt)
-        if (cuntarea > 75 and cuntarea < 1000):
-            cv2.drawContours(framecopy, cunt, -1, (0, 255, 0))
+    for c in cnts:
+        c_area = cv2.contourArea(c)
+        if (c_area > 75 and c_area < 1000):
+            cv2.drawContours(framecopy, c, -1, (0, 255, 0))
+
+    cv2.putText(frame,str(accuracy)[0:5] + "%", (25,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 3)
 
     cv2.imshow("Contours", framecopy)
     cv2.imshow("Mask", mask)
@@ -204,9 +218,9 @@ while True:
 	# if the 'q' key is pressed, stop the loop
     if key == ord("q"):
         break
-    elif key == ord("s"):
+    elif key == ord("j"):
         rate += 10
-    elif key == ord("f"):
+    elif key == ord("l"):
         rate -= 10
         if rate < 1 : rate = 1
 
