@@ -47,6 +47,7 @@ fgbg2 = cv2.createBackgroundSubtractorMOG2();
 # Framerate (ms)
 rate = 0
 
+#Accuracy variables
 accuracy = 0
 olderror = 5
 
@@ -58,34 +59,31 @@ iters = 1
 # if a video path was not supplied, grab the reference
 # to the webcam
 if not args.get("video", False):
-    camera = cv2.VideoCapture(0)
+    print('Must use Shots.mp4... Try again')
+    quit()
+    #camera = cv2.VideoCapture(0)
 
 # otherwise, grab a reference to the video file
 else:
     camera = cv2.VideoCapture(args["video"])
 
-#Creating a Pandas DataFrame To Store Data Point
-Data_Features = ['x', 'y', 'time']
-Data_Points = pd.DataFrame(data = None, columns = Data_Features , dtype = float)
-
-
-#Reading the time in the begining of the video.
-start = time.time()
-
 # Initialize found points vector to meaningless value (will be instantly reset)
 points = [(0, 0)]
 
+#Step up so the pyplot is non-blocking
 plt.axis([150,400,-150,300])
+
 plt.ion()
 plt.show()
+
+
+
 
 # keep looping
 while True:
 	# grab the current frame
     (grabbed, frame) = camera.read()
 
-	#Reading The Current Time
-    current_time = time.time() - start
 
 	# if we are viewing a video and we did not grab a frame,
 	# then we have reached the end of the video
@@ -114,13 +112,11 @@ while True:
         cv2.CHAIN_APPROX_SIMPLE)[-2]
     center = None
 
-
-
-
     if len(cnts) > 0:
-		# Need to fix ripped code.
 
-        # Pick the largest contour that was found
+        #Contours section
+
+        # Pick the largest contour that was found, place a circle around it
         c = min(cnts, key=circleDif)
         ((x, y), radius) = cv2.minEnclosingCircle(c)
         M = cv2.moments(c)
@@ -137,24 +133,16 @@ while True:
                 points.append(center)
 
             # Given enough points lets try to make some predictions.
-            # TTTTTTTTTT     OOOOOOOO   DDDDDDDDD    OOOOOOOO
-            #      T        OO      OO  D       DD  OO      OO
-            #      T        O        O  D        D  O        O
-            #      T        O        O  D        D  O        O
-            #      T        O        O  D        D  O        O
-            #      T        O        O  D        D  O        O
-            #      T        O        O  D        D  O        O
-            #      T        OO      OO  D       DD  OO      OO
-            #      T         OOOOOOOO   DDDDDDDDD    OOOOOOOO
-
-
             if (len(points) > 5):
+
+                #Area for prediction and pyplot stuff
+
                 x_coords = [point[0] for point in points]
                 y_coords = [point[1] for point in points]
                 fit, error, _, _, _ = np.polyfit(x_coords, y_coords, 2, full=True)
                 f = np.poly1d(fit)
 
-
+                #Accuracy check
                 ycheck = f(XTRUTH)
                 accuracy = 1 - abs(YTRUTH - ycheck)/BALL_WIDTH
                 accuracy = 0 if accuracy < 0 else accuracy * 100
@@ -168,23 +156,27 @@ while True:
                 print("Chance to make it: {:.4F}".format(accuracy))
 
                 xp = np.linspace(150, 400, 200)
-                plt.scatter(XTRUTH,YTRUTH,label = 'Hoop Location')
+                plt.ylim(-250,500)
+                plt.scatter(XTRUTH,YTRUTH,label = 'Hoop Location', c = 'blue', marker = 'x')
                 plt.scatter(x, y, label = 'Ball Postition')
                 plt.scatter(x_coords,y_coords, label = 'Tracked Postitions')
                 plt.plot(xp, f(xp), '--', label = 'Trajectory')
+
+                plt.title('Tracked Ball postions and parabolic regression lines \n (x,y) are relative to top left of image')
+                plt.xlabel('x pixel location')
+                plt.ylabel('y pixel location')
                 #plt.legend()
+
                 plt.draw()
                 plt.pause(10**-4)
-                #plt.ylim(-250,500)
 
 
         if  (radius < 10 ) :
+            #Draws circle on frame (yellow)
             cv2.circle(frame, (int(x), int(y)), int(radius),
 	           (0, 255, 255), 2)
             cv2.circle(frame, center, 5, (0, 0, 255), -1)
 
-            #Save The Data
-            Data_Points.loc[Data_Points.size/3] = [x , y, current_time]
 
 	# update the points queue
     pts.appendleft(center)
@@ -192,6 +184,8 @@ while True:
     framecopy = frame.copy()
 	# loop over the set of tracked points
     for i in range(1, len(pts)):
+        #adds red trail on trame
+
 		# if either of the tracked points are None, ignore
 		# them
         if pts[i - 1] is None or pts[i] is None:
@@ -208,6 +202,7 @@ while True:
         if (c_area > 75 and c_area < 1000):
             cv2.drawContours(framecopy, c, -1, (0, 255, 0))
 
+    #accuracy print statement on frame window
     cv2.putText(frame,str(accuracy)[0:5] + "%", (25,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 3)
 
     cv2.imshow("Contours", framecopy)
@@ -216,6 +211,8 @@ while True:
     key = cv2.waitKey(rate) & 0xFF
 
 	# if the 'q' key is pressed, stop the loop
+    # 'j' for faster framerate processing
+    # 'l' for slower ...
     if key == ord("q"):
         break
     elif key == ord("j"):
@@ -224,38 +221,6 @@ while True:
         rate -= 10
         if rate < 1 : rate = 1
 
-
-
-
-#Ripped Data Collection
-
-#'h' is the focal length of the camera
-#'X0' is the correction term of shifting of x-axis
-#'Y0' is the correction term ofshifting of y-axis
-#'time0' is the correction term for correction of starting of time
-h = 0.2
-X0 = 0
-Y0 = 0
-time0 = 0
-theta0 = 0.3
-
-#Applying the correction terms to obtain actual experimental data
-Data_Points['x'] = Data_Points['x']- X0
-Data_Points['y'] = Data_Points['y'] - Y0
-Data_Points['time'] = Data_Points['time'] - time0
-
-#Calulataion of theta value
-Data_Points['theta'] = 2 * np.arctan(Data_Points['y']*0.0000762/h)#the factor correspons to pixel length in real life
-Data_Points['theta'] = Data_Points['theta'] - theta0
-
-#Creating the 'Theta' vs 'Time' plot
-plt.plot(Data_Points['theta'], Data_Points['time'])
-plt.xlabel('Theta')
-plt.ylabel('Time')
-
-#Export The Data Points As cvs File and plot
-Data_Points.to_csv('Data_Set.csv', sep=",")
-plt.savefig('Time_vs_Theta_Graph.svg', transparent= True)
 
 # cleanup the camera and close any open windows
 camera.release()
