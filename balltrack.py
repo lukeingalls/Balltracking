@@ -1,3 +1,19 @@
+'''
+    Authors: Cedric Kram, Luke Ingalls
+    
+    The base code is from: https://www.pyimagesearch.com/2015/09/14/ball-tracking-with-opencv/
+    Heavy modifications were made to adapt it to our problem.
+
+    To use run 'python balltrack.py -v Shots.mp4'
+
+    This uses color and background masks to isolate the ball. With the information
+    of the ball motion a prediction is made as to where the ball will end up relative
+    to the hoop. The percent chande the ball will go in is displayed on the screen.
+
+
+'''
+
+
 from collections import deque
 import numpy as np
 import argparse
@@ -9,6 +25,7 @@ import matplotlib.pyplot as plt
 from time import sleep
 
 
+# Scoring function for the contours. Chooses the most circular contour (of a non-pixel size)
 def circleDif(p):
     circ = cv2.minEnclosingCircle(p)
 
@@ -23,17 +40,12 @@ ap.add_argument("-b", "--buffer", type=int, default=64,
     help="max buffer size")
 args = vars(ap.parse_args())
 
-# define the lower and upper boundaries of the "green"
-# ball in the HSV color space, then initialize the
-# list of tracked points
+
+# These are largely tuning variables. The current pair in use are farend and lowend. These are HSV ranges for acceptable colors
 # brownLower = (47,25,35)
 # brownUpper = (175,156,153)
 
-# These are largely tuning variables. The current pair in use are farend and lowend. These are HSV ranges for acceptable colors
-brownLower = (47,25,35)
-brownUpper = (175,156,153)
-
-farend = (118, 25, 105) # We may want to change this V value
+farend = (118, 25, 105) 
 lowend = (130, 52, 150)
 
 #Denotes where the center of the hoop is and the ball width. This is used for basic prediction
@@ -51,8 +63,8 @@ rate = 0
 accuracy = 0
 olderror = 5
 
-# ?
 
+# Noise reduction and drawing variable
 pts = deque(maxlen=args["buffer"])
 iters = 1
 
@@ -67,7 +79,7 @@ if not args.get("video", False):
 else:
     camera = cv2.VideoCapture(args["video"])
 
-# Initialize found points vector to meaningless value (will be instantly reset)
+# Initialize found points vector to meaningless value (will be instantly reset from this value)
 points = [(0, 0)]
 
 #Step up so the pyplot is non-blocking
